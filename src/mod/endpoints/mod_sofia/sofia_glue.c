@@ -373,12 +373,12 @@ void sofia_glue_check_dtmf_type(private_object_t *tech_pvt)
 }
 
 
-void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch_port_t port, const char *sr, int force)
+void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch_port_t port, switch_port_t v_port, const char *sr, int force)
 {
 	char buf[2048];
 	int ptime = 0;
 	uint32_t rate = 0;
-	uint32_t v_port;
+	//uint32_t v_port;
 	int use_cng = 1;
 	const char *val;
 	const char *family;
@@ -642,8 +642,11 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 		if (!tech_pvt->local_sdp_video_port) {
 			sofia_glue_tech_choose_video_port(tech_pvt, 0);
 		}
+		if (!v_port) {
+			v_port = tech_pvt->adv_sdp_video_port;
+		}
 
-		if ((v_port = tech_pvt->adv_sdp_video_port)) {
+		if (v_port) {
 			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=video %d RTP/AVP", v_port);
 
 			/*****************************/
@@ -2128,7 +2131,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 	}
 
 	if (!switch_channel_get_private(tech_pvt->channel, "t38_options") || zstr(tech_pvt->local_sdp_str)) {
-		sofia_glue_set_local_sdp(tech_pvt, NULL, 0, NULL, 0);
+		sofia_glue_set_local_sdp(tech_pvt, NULL, 0, 0, NULL, 0);
 	}
 
 	sofia_set_flag_locked(tech_pvt, TFLAG_READY);
@@ -5234,7 +5237,7 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 
 						tech_pvt->video_recv_pt = (switch_payload_t)map->rm_pt;
 						
-						if (switch_channel_direction(channel) == SWITCH_CALL_DIRECTION_OUTBOUND) {
+						if (switch_channel_direction(channel) == SWITCH_CALL_DIRECTION_OUTBOUND  && !sofia_test_flag(tech_pvt, TFLAG_REINVITE)) {
 							sofia_glue_get_offered_pt(tech_pvt, mimp, &tech_pvt->video_recv_pt);
 						}
 
@@ -5877,7 +5880,7 @@ static int recover_callback(void *pArg, int argc, char **argv, char **columnName
 				//sofia_glue_tech_set_video_codec(tech_pvt, 1);
 			}
 
-			sofia_glue_set_local_sdp(tech_pvt, NULL, 0, NULL, 1);
+			sofia_glue_set_local_sdp(tech_pvt, NULL, 0, 0, NULL, 1);
 
 			if (sofia_glue_activate_rtp(tech_pvt, 0) != SWITCH_STATUS_SUCCESS) {
 				switch_xml_free(xml);
@@ -5892,7 +5895,7 @@ static int recover_callback(void *pArg, int argc, char **argv, char **columnName
 
 			if (switch_rtp_ready(tech_pvt->video_rtp_session)) {
 				if ((tmp = switch_channel_get_variable(channel, "sip_video_recv_pt"))) {
-					switch_rtp_set_recv_pt(tech_pvt->rtp_session, (switch_payload_t)atoi(tmp));
+					switch_rtp_set_recv_pt(tech_pvt->video_rtp_session, (switch_payload_t)atoi(tmp));
 				}
 			}
 

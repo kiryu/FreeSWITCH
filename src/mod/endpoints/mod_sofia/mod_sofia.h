@@ -898,7 +898,7 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 
 void sofia_glue_deactivate_rtp(private_object_t *tech_pvt);
 
-void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch_port_t port, const char *sr, int force);
+void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch_port_t port, switch_port_t v_port, const char *sr, int force);
 
 void sofia_glue_tech_prepare_codecs(private_object_t *tech_pvt);
 
