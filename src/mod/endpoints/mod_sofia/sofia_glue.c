@@ -372,8 +372,7 @@ void sofia_glue_check_dtmf_type(private_object_t *tech_pvt)
 	}
 }
 
-
-void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch_port_t port, switch_port_t v_port, const char *sr, int force)
+void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip, const char *media_ip, switch_port_t port, switch_port_t v_port, const char *sr, int force)
 {
 	char buf[65536];
 	int ptime = 0;
@@ -434,21 +433,25 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 		verbose_sdp = 1;
 	}
 
-	if (!force && !ip && zstr(sr)
+	if (!force && !media_ip && zstr(sr)
 		&& (switch_channel_test_flag(tech_pvt->channel, CF_PROXY_MODE) || switch_channel_test_flag(tech_pvt->channel, CF_PROXY_MEDIA))) {
 		return;
 	}
 
-	if (!ip) {
-		if (!(ip = tech_pvt->adv_sdp_audio_ip)) {
-			ip = tech_pvt->proxy_sdp_audio_ip;
+	if (!media_ip) {
+		if (!(media_ip = tech_pvt->adv_sdp_audio_ip)) {
+			media_ip = tech_pvt->proxy_sdp_audio_ip;
 		}
 	}
 
-	if (!ip) {
+	if (!media_ip) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "%s NO IP!\n", switch_channel_get_name(tech_pvt->channel));
 		return;
 	}
+
+    if (!session_ip) {
+        session_ip = media_ip;
+    }
 
 	if (!port) {
 		if (!(port = tech_pvt->adv_sdp_audio_port)) {
@@ -491,14 +494,14 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 		sr = NULL;
 	}
 
-	family = strchr(ip, ':') ? "IP6" : "IP4";
+	family = strchr(session_ip, ':') ? "IP6" : "IP4";
 	switch_snprintf(buf, sizeof(buf),
 					"v=0\n"
 					"o=%s %010u %010u IN %s %s\n"
 					"s=%s\n"
 					"c=IN %s %s\n" "t=0 0\n"
 					"%s",
-					username, tech_pvt->owner_id, tech_pvt->session_id, family, ip, username, family, ip, srbuf);
+					username, tech_pvt->owner_id, tech_pvt->session_id, family, session_ip, username, family, session_ip, srbuf);
 
 	if (tech_pvt->rm_encoding) {
 		switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=audio %d RTP/%sAVP", 
@@ -515,6 +518,10 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 		}
 		
 		switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "\n");
+		if (session_ip != media_ip && strcmp(session_ip, media_ip) != 0) {
+			family = strchr(media_ip, ':') ? "IP6" : "IP4";
+			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),  "c=IN %s %s\n", family, media_ip);
+		}
 
 		rate = tech_pvt->rm_rate;
 		switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=rtpmap:%d %s/%d\n", tech_pvt->agreed_pt, tech_pvt->rm_encoding, rate);
@@ -637,7 +644,6 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 				
 			}
 		}
-
 	}
 	
 	if (sofia_test_flag(tech_pvt, TFLAG_VIDEO)) {
@@ -680,6 +686,12 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 			}
 
 			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "\n");
+
+			if (session_ip != media_ip && strcmp(session_ip, media_ip) != 0) {
+				family = strchr(media_ip, ':') ? "IP6" : "IP4";
+				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "c=IN %s %s\n", family, media_ip);
+			}
+
 
 			if (tech_pvt->video_rm_encoding) {
 				const char *of;
@@ -2137,7 +2149,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 	}
 
 	if (!switch_channel_get_private(tech_pvt->channel, "t38_options") || zstr(tech_pvt->local_sdp_str)) {
-		sofia_glue_set_local_sdp(tech_pvt, NULL, 0, 0, NULL, 0);
+		sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 0);
 	}
 
 	sofia_set_flag_locked(tech_pvt, TFLAG_READY);
@@ -3263,6 +3275,7 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 
 			switch_snprintf(tmp, sizeof(tmp), "%d", tech_pvt->remote_sdp_audio_port);
 			switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_IP_VARIABLE, tech_pvt->remote_sdp_audio_ip);
+			switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_SESSION_IP_VARIABLE, tech_pvt->remote_sdp_session_ip);
 			switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_PORT_VARIABLE, tmp);
 		}
 	}
@@ -3587,6 +3600,7 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 
 		switch_snprintf(tmp, sizeof(tmp), "%d", tech_pvt->remote_sdp_audio_port);
 		switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_IP_VARIABLE, tech_pvt->remote_sdp_audio_ip);
+		switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_SESSION_IP_VARIABLE, tech_pvt->remote_sdp_session_ip);
 		switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_PORT_VARIABLE, tmp);
 
 
@@ -4619,6 +4633,10 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 		sofia_set_flag_locked(tech_pvt, TFLAG_LIBERAL_DTMF);
 	}
 
+	if (sdp->sdp_connection) {
+		tech_pvt->remote_sdp_session_ip = switch_core_session_strdup(session, (char *) sdp->sdp_connection->c_address);
+	}
+
 	if ((m = sdp->sdp_media) && 
 		(m->m_mode == sdp_sendonly || m->m_mode == sdp_inactive || 
 		 (m->m_connections && m->m_connections->c_address && !strcmp(m->m_connections->c_address, "0.0.0.0")))) {
@@ -4781,6 +4799,7 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 						
 						switch_snprintf(tmp, sizeof(tmp), "%d", tech_pvt->remote_sdp_audio_port);
 						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_IP_VARIABLE, tech_pvt->remote_sdp_audio_ip);
+						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_SESSION_IP_VARIABLE, tech_pvt->remote_sdp_session_ip);
 						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_PORT_VARIABLE, tmp);
 
 						if (switch_rtp_set_remote_address(tech_pvt->rtp_session, tech_pvt->remote_sdp_audio_ip,
@@ -5117,6 +5136,7 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 					tech_pvt->negotiated_codecs[tech_pvt->num_negotiated_codecs++] = mimp;
 					switch_snprintf(tmp, sizeof(tmp), "%d", tech_pvt->remote_sdp_audio_port);
 					switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_IP_VARIABLE, tech_pvt->remote_sdp_audio_ip);
+					switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_SESSION_IP_VARIABLE, tech_pvt->remote_sdp_session_ip);
 					switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_MEDIA_PORT_VARIABLE, tmp);
 					tech_pvt->audio_recv_pt = (switch_payload_t)map->rm_pt;
 					
@@ -5902,8 +5922,7 @@ static int recover_callback(void *pArg, int argc, char **argv, char **columnName
 				}
 				//sofia_glue_tech_set_video_codec(tech_pvt, 1);
 			}
-
-			sofia_glue_set_local_sdp(tech_pvt, NULL, 0, 0, NULL, 1);
+			sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 1);
 
 			if (sofia_glue_activate_rtp(tech_pvt, 0) != SWITCH_STATUS_SUCCESS) {
 				switch_xml_free(xml);
