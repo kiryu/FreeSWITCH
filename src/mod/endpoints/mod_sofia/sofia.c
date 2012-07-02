@@ -8010,6 +8010,8 @@ void sofia_handle_sip_i_invite(nua_t *nua, sofia_profile_t *profile, nua_handle_
 
 	if (sip->sip_contact && sip->sip_contact->m_url) {
 		char tmp[35] = "";
+// following code causes a routing failure when FS will send re-INVITE later.
+/*
 		const char *ipv6 = strchr(tech_pvt->remote_ip, ':');
 
 		transport = sofia_glue_url2transport(sip->sip_contact->m_url);
@@ -8019,7 +8021,7 @@ void sofia_handle_sip_i_invite(nua_t *nua, sofia_profile_t *profile, nua_handle_
 										"sip:%s@%s%s%s:%d;transport=%s",
 										sip->sip_contact->m_url->url_user,
 										ipv6 ? "[" : "", tech_pvt->remote_ip, ipv6 ? "]" : "", tech_pvt->remote_port, sofia_glue_transport2str(transport));
-
+*/
 		switch_channel_set_variable(channel, "sip_received_ip", tech_pvt->remote_ip);
 		snprintf(tmp, sizeof(tmp), "%d", tech_pvt->remote_port);
 		switch_channel_set_variable(channel, "sip_received_port", tmp);
