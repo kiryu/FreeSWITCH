@@ -321,7 +321,7 @@ static void generate_m(private_object_t *tech_pvt, char *buf, size_t buflen,
 	}
 
 	if (secure) {
-		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=crypto:%s\n", tech_pvt->local_crypto_key);
+		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=crypto:%s\n", tech_pvt->local_audio_crypto_key);
 		//switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=encryption:optional\n");
 	}
 
@@ -372,7 +372,7 @@ void sofia_glue_check_dtmf_type(private_object_t *tech_pvt)
 	}
 }
 
-void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip, const char *media_ip, switch_port_t port, switch_port_t v_port, const char *sr, int force)
+void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip, const char *media_ip, switch_port_t port, switch_port_t v_port, const char *crypto, const char* v_crypto, const char *sr, int force)
 {
 	char buf[65536];
 	int ptime = 0;
@@ -505,7 +505,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 
 	if (tech_pvt->rm_encoding) {
 		switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=audio %d RTP/%sAVP", 
-						port, (!zstr(tech_pvt->local_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) ? "S" : "");
+						port, (!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) ? "S" : "");
 
 		switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " %d", tech_pvt->pt);
 
@@ -566,10 +566,13 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 		if (!zstr(sr)) {
 			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=%s\n", sr);
 		}
-	
-		if (!zstr(tech_pvt->local_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
-			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=crypto:%s\n", tech_pvt->local_crypto_key);
-			//switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=encryption:optional\n");
+
+		if (!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
+			crypto = tech_pvt->local_audio_crypto_key;
+		}
+
+		if (crypto) {
+			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=crypto:%s\n", crypto);
 		}
 
 	} else if (tech_pvt->num_codecs) {
@@ -591,7 +594,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 			char *bp = buf;
 			int both = 1;
 
-			if ((!zstr(tech_pvt->local_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE))) {
+			if ((!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE))) {
 				generate_m(tech_pvt, buf, sizeof(buf), port, 0, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 1);
 				bp = (buf + strlen(buf));
 
@@ -627,7 +630,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 
 					cur_ptime = this_ptime;			
 					
-					if ((!zstr(tech_pvt->local_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE))) {
+					if ((!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE))) {
 						generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, cur_ptime, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 1);
 						bp = (buf + strlen(buf));
 
@@ -655,7 +658,17 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 		}
 
 		if (v_port) {
-			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=video %d RTP/AVP", v_port);
+
+            if (!v_crypto) {
+                v_crypto = tech_pvt->local_video_crypto_key;
+            }
+			
+			if (v_crypto) {
+				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=video %d RTP/SAVP", v_port);
+			}
+			else {
+				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=video %d RTP/AVP", v_port);
+			}
 
 			/*****************************/
 			if (tech_pvt->video_rm_encoding) {
@@ -775,6 +788,10 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 								  tech_pvt->local_sdp_video_zrtp_hash);
 				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=zrtp-hash:%s\n",
 								tech_pvt->local_sdp_video_zrtp_hash);
+			}
+
+			if (v_crypto) {
+				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=crypto:%s\n", v_crypto);
 			}
 		}
 	}
@@ -2149,7 +2166,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 	}
 
 	if (!switch_channel_get_private(tech_pvt->channel, "t38_options") || zstr(tech_pvt->local_sdp_str)) {
-		sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 0);
+		sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 0);
 	}
 
 	sofia_set_flag_locked(tech_pvt, TFLAG_READY);
@@ -2578,10 +2595,13 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 		}
 	}
 
+switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_INFO, "ROUTE1 route_uri=%s, route=%s\n", route_uri, route);
+
 	if ((val = switch_channel_get_variable(channel, "sip_route_uri"))) {
 		route_uri = switch_core_session_strdup(session, val);
 		route = NULL;
 	}
+switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_INFO, "ROUTE2 route_uri=%s, route=%s\n", route_uri, route);
 
 	if (route_uri) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_DEBUG, "%s Setting proxy route to %s\n", route_uri,
@@ -2589,6 +2609,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 		tech_pvt->route_uri = switch_core_session_strdup(tech_pvt->session, route_uri);
 	}
 
+switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_INFO, "ROUTE3 route_uri=%s, route=%s\n", route_uri, route);
 
 	if ((val = switch_channel_get_variable(tech_pvt->channel, "sip_invite_cseq"))) {
 		uint32_t callsequence = (uint32_t) strtoul(val, NULL, 10);
@@ -3061,7 +3082,7 @@ switch_status_t sofia_glue_tech_set_codec(private_object_t *tech_pvt, int force)
 }
 
 
-switch_status_t sofia_glue_build_crypto(private_object_t *tech_pvt, int index, switch_rtp_crypto_key_type_t type, switch_rtp_crypto_direction_t direction)
+switch_status_t sofia_glue_build_crypto(private_object_t *tech_pvt, int index, switch_rtp_crypto_key_type_t type, switch_rtp_crypto_direction_t direction, int video)
 {
 	unsigned char b64_key[512] = "";
 	const char *type_str;
@@ -3077,10 +3098,19 @@ switch_status_t sofia_glue_build_crypto(private_object_t *tech_pvt, int index, s
 	}
 
 	if (direction == SWITCH_RTP_CRYPTO_SEND) {
-		key = tech_pvt->local_raw_key;
+		if (video) {
+			key = tech_pvt->local_video_raw_key;
+		}
+		else {
+			key = tech_pvt->local_audio_raw_key;
+		}
 	} else {
-		key = tech_pvt->remote_raw_key;
-
+		if (video) {
+			key = tech_pvt->remote_video_raw_key;
+		}
+		else {
+			key = tech_pvt->remote_audio_raw_key;
+		}
 	}
 
 	switch_rtp_get_random(key, SWITCH_RTP_KEY_LEN);
@@ -3091,14 +3121,30 @@ switch_status_t sofia_glue_build_crypto(private_object_t *tech_pvt, int index, s
 		*p-- = '\0';
 	}
 
-	tech_pvt->local_crypto_key = switch_core_session_sprintf(tech_pvt->session, "%d %s inline:%s", index, type_str, b64_key);
-	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_DEBUG, "Set Local Key [%s]\n", tech_pvt->local_crypto_key);
+	if (video) {
+		tech_pvt->local_video_crypto_key = switch_core_session_sprintf(tech_pvt->session, "%d %s inline:%s", index, type_str, b64_key);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_DEBUG, "Set Video Local Key [%s]\n", tech_pvt->local_video_crypto_key);
+	}
+	else {
+		tech_pvt->local_audio_crypto_key = switch_core_session_sprintf(tech_pvt->session, "%d %s inline:%s", index, type_str, b64_key);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_DEBUG, "Set Local Key [%s]\n", tech_pvt->local_audio_crypto_key);
+	}
 
 	if (!sofia_test_pflag(tech_pvt->profile, PFLAG_DISABLE_SRTP_AUTH) &&
 		!((val = switch_channel_get_variable(tech_pvt->channel, "NDLB_support_asterisk_missing_srtp_auth")) && switch_true(val))) {
-		tech_pvt->crypto_type = type;
+		if (video) {
+			tech_pvt->crypto_video_type = type;
+		}
+		else {
+			tech_pvt->crypto_audio_type = type;
+		}
 	} else {
-		tech_pvt->crypto_type = AES_CM_128_NULL_AUTH;
+		if (video) {
+			tech_pvt->crypto_video_type = AES_CM_128_NULL_AUTH;
+		}
+		else {
+			tech_pvt->crypto_audio_type = AES_CM_128_NULL_AUTH;
+		}
 	}
 
 	return SWITCH_STATUS_SUCCESS;
@@ -3141,10 +3187,10 @@ switch_status_t sofia_glue_add_crypto(private_object_t *tech_pvt, const char *ke
 
 			if (direction == SWITCH_RTP_CRYPTO_SEND) {
 				tech_pvt->crypto_send_type = type;
-				memcpy(tech_pvt->local_raw_key, key, SWITCH_RTP_KEY_LEN);
+				memcpy(tech_pvt->local_audio_raw_key, key, SWITCH_RTP_KEY_LEN);
 			} else {
 				tech_pvt->crypto_recv_type = type;
-				memcpy(tech_pvt->remote_raw_key, key, SWITCH_RTP_KEY_LEN);
+				memcpy(tech_pvt->remote_audio_raw_key, key, SWITCH_RTP_KEY_LEN);
 			}
 			return SWITCH_STATUS_SUCCESS;
 		}
@@ -3588,11 +3634,11 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 			switch_rtp_set_cng_pt(tech_pvt->rtp_session, tech_pvt->cng_pt);
 		}
 
-		if (tech_pvt->remote_crypto_key && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
-			sofia_glue_add_crypto(tech_pvt, tech_pvt->remote_crypto_key, SWITCH_RTP_CRYPTO_RECV);
-			switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_SEND, 1, tech_pvt->crypto_type, tech_pvt->local_raw_key,
+		if (tech_pvt->remote_audio_crypto_key && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
+			sofia_glue_add_crypto(tech_pvt, tech_pvt->remote_audio_crypto_key, SWITCH_RTP_CRYPTO_RECV);
+			switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_SEND, 1, tech_pvt->crypto_audio_type, tech_pvt->local_audio_raw_key,
 									  SWITCH_RTP_KEY_LEN);
-			switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_RECV, tech_pvt->crypto_tag, tech_pvt->crypto_type, tech_pvt->remote_raw_key,
+			switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_RECV, tech_pvt->audio_crypto_tag, tech_pvt->crypto_audio_type, tech_pvt->remote_audio_raw_key,
 									  SWITCH_RTP_KEY_LEN);
 			switch_channel_set_variable(tech_pvt->channel, SOFIA_SECURE_MEDIA_CONFIRMED_VARIABLE, "true");
 		}
@@ -4854,38 +4900,39 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 					crypto = attr->a_value;
 					crypto_tag = atoi(crypto);
 
-					if (tech_pvt->remote_crypto_key && switch_rtp_ready(tech_pvt->rtp_session)) {
+					if (tech_pvt->remote_audio_crypto_key && switch_rtp_ready(tech_pvt->rtp_session)) {
 						/* Compare all the key. The tag may remain the same even if key changed */
-						if (crypto && !strcmp(crypto, tech_pvt->remote_crypto_key)) {
+						if (crypto && !strcmp(crypto, tech_pvt->remote_audio_crypto_key)) {
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Existing key is still valid.\n");
 						} else {
-							const char *a = switch_stristr("AES", tech_pvt->remote_crypto_key);
+							const char *a = switch_stristr("AES", tech_pvt->remote_audio_crypto_key);
 							const char *b = switch_stristr("AES", crypto);
 
 							/* Change our key every time we can */
 							if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_32, crypto)) {
 								switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_32);
-								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_32, SWITCH_RTP_CRYPTO_SEND);
-								switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_SEND, atoi(crypto), tech_pvt->crypto_type,
-														  tech_pvt->local_raw_key, SWITCH_RTP_KEY_LEN);
+								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_32, SWITCH_RTP_CRYPTO_SEND, 0);
+								switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_SEND, atoi(crypto), tech_pvt->crypto_audio_type,
+														  tech_pvt->local_audio_raw_key, SWITCH_RTP_KEY_LEN);
 							} else if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_80, crypto)) {
 								switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_80);
-								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_80, SWITCH_RTP_CRYPTO_SEND);
-								switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_SEND, atoi(crypto), tech_pvt->crypto_type,
-														  tech_pvt->local_raw_key, SWITCH_RTP_KEY_LEN);
+								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_80, SWITCH_RTP_CRYPTO_SEND, 0);
+								switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_SEND, atoi(crypto), tech_pvt->crypto_audio_type,
+														  tech_pvt->local_audio_raw_key, SWITCH_RTP_KEY_LEN);
 							} else {
 								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Crypto Setup Failed!.\n");
 							}
 
 							if (a && b && !strncasecmp(a, b, 23)) {
 								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Change Remote key to [%s]\n", crypto);
-								tech_pvt->remote_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
-								tech_pvt->crypto_tag = crypto_tag;
+								tech_pvt->remote_audio_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
+								switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_AUDIO_CRYPTO_VARIABLE, tech_pvt->remote_audio_crypto_key);
+								tech_pvt->audio_crypto_tag = crypto_tag;
 
 								if (switch_rtp_ready(tech_pvt->rtp_session) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
-									sofia_glue_add_crypto(tech_pvt, tech_pvt->remote_crypto_key, SWITCH_RTP_CRYPTO_RECV);
-									switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_RECV, tech_pvt->crypto_tag,
-															  tech_pvt->crypto_type, tech_pvt->remote_raw_key, SWITCH_RTP_KEY_LEN);
+									sofia_glue_add_crypto(tech_pvt, tech_pvt->remote_audio_crypto_key, SWITCH_RTP_CRYPTO_RECV);
+									switch_rtp_add_crypto_key(tech_pvt->rtp_session, SWITCH_RTP_CRYPTO_RECV, tech_pvt->audio_crypto_tag,
+															  tech_pvt->crypto_audio_type, tech_pvt->remote_audio_raw_key, SWITCH_RTP_KEY_LEN);
 								}
 								got_crypto++;
 							} else {
@@ -4893,18 +4940,19 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 							}
 						}
 					} else if (!switch_rtp_ready(tech_pvt->rtp_session)) {
-						tech_pvt->remote_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
-						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Set Remote Key [%s]\n", tech_pvt->remote_crypto_key);
-						tech_pvt->crypto_tag = crypto_tag;
+						tech_pvt->remote_audio_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
+						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_AUDIO_CRYPTO_VARIABLE, tech_pvt->remote_audio_crypto_key);
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Set Remote Key [%s]\n", tech_pvt->remote_audio_crypto_key);
+						tech_pvt->audio_crypto_tag = crypto_tag;
 						got_crypto++;
 
-						if (zstr(tech_pvt->local_crypto_key)) {
+						if (zstr(tech_pvt->local_audio_crypto_key)) {
 							if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_32, crypto)) {
 								switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_32);
-								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_32, SWITCH_RTP_CRYPTO_SEND);
+								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_32, SWITCH_RTP_CRYPTO_SEND, 0);
 							} else if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_80, crypto)) {
 								switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_80);
-								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_80, SWITCH_RTP_CRYPTO_SEND);
+								sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_80, SWITCH_RTP_CRYPTO_SEND, 0);
 							} else {
 								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Crypto Setup Failed!.\n");
 							}
@@ -5209,6 +5257,33 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 			const switch_codec_implementation_t *mimp = NULL;
 			int vmatch = 0, i;
 			switch_channel_set_variable(tech_pvt->channel, "video_possible", "true");
+
+			for (attr = m->m_attributes; attr; attr = attr->a_next) {
+
+				 if (!strcasecmp(attr->a_name, "crypto") && !zstr(attr->a_value)) {
+					if (m->m_proto != sdp_proto_srtp) {
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "a=crypto in RTP/AVP, refer to rfc3711\n");
+						match = 0;
+						goto done;
+					}
+
+					crypto = attr->a_value;
+
+                    if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_32, crypto)) {
+                        switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_VIDEO_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_32);
+						tech_pvt->remote_video_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
+						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_VIDEO_CRYPTO_VARIABLE, tech_pvt->remote_video_crypto_key);
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Set Video Remote Key [%s]\n", tech_pvt->remote_video_crypto_key);
+                    } else if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_80, crypto)) {
+                        switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_VIDEO_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_80);
+						tech_pvt->remote_video_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
+						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_VIDEO_CRYPTO_VARIABLE, tech_pvt->remote_video_crypto_key);
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Set Video Remote Key [%s]\n", tech_pvt->remote_video_crypto_key);
+                    } else {
+                        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Video Crypto Setup Failed!.\n");
+                    }
+				}
+			}
 
 			connection = sdp->sdp_connection;
 			if (m->m_connections) {
@@ -5922,7 +5997,7 @@ static int recover_callback(void *pArg, int argc, char **argv, char **columnName
 				}
 				//sofia_glue_tech_set_video_codec(tech_pvt, 1);
 			}
-			sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 1);
+			sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 1);
 
 			if (sofia_glue_activate_rtp(tech_pvt, 0) != SWITCH_STATUS_SUCCESS) {
 				switch_xml_free(xml);

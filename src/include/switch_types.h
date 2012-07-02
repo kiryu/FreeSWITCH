@@ -197,6 +197,8 @@ SWITCH_BEGIN_EXTERN_C
 #define SWITCH_REMOTE_VIDEO_PORT_VARIABLE "remote_video_port"
 #define SWITCH_LOCAL_VIDEO_IP_VARIABLE "local_video_ip"
 #define SWITCH_LOCAL_VIDEO_PORT_VARIABLE "local_video_port"
+#define SWITCH_REMOTE_AUDIO_CRYPTO_VARIABLE "remote_audio_crypto"
+#define SWITCH_REMOTE_VIDEO_CRYPTO_VARIABLE "remote_video_crypto"
 #define SWITCH_HANGUP_AFTER_BRIDGE_VARIABLE "hangup_after_bridge"
 #define SWITCH_PARK_AFTER_BRIDGE_VARIABLE "park_after_bridge"
 #define SWITCH_TRANSFER_AFTER_BRIDGE_VARIABLE "transfer_after_bridge"

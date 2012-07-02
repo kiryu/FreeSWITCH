@@ -111,8 +111,10 @@ typedef struct private_object private_object_t;
 #define SOFIA_DEFAULT_TLS_PORT "5061"
 #define SOFIA_REFER_TO_VARIABLE "sip_refer_to"
 #define SOFIA_SECURE_MEDIA_VARIABLE "sip_secure_media"
+#define SOFIA_SECURE_VIDEO_VARIABLE "sip_secure_video"
 #define SOFIA_SECURE_MEDIA_CONFIRMED_VARIABLE "sip_secure_media_confirmed"
 #define SOFIA_HAS_CRYPTO_VARIABLE "sip_has_crypto"
+#define SOFIA_HAS_VIDEO_CRYPTO_VARIABLE "sip_has_video_crypto"
 #define SOFIA_CRYPTO_MANDATORY_VARIABLE "sip_crypto_mandatory"
 #define FREESWITCH_SUPPORT "update_display,send_info"
 
@@ -739,12 +741,16 @@ struct private_object {
 	char *rm_fmtp;
 	char *fmtp_out;
 	char *remote_sdp_str;
-	int crypto_tag;
-	unsigned char local_raw_key[SWITCH_RTP_MAX_CRYPTO_LEN];
-	unsigned char remote_raw_key[SWITCH_RTP_MAX_CRYPTO_LEN];
+	int audio_crypto_tag;
+	int video_crypto_tag;
+	unsigned char local_audio_raw_key[SWITCH_RTP_MAX_CRYPTO_LEN];
+	unsigned char local_video_raw_key[SWITCH_RTP_MAX_CRYPTO_LEN];
+	unsigned char remote_audio_raw_key[SWITCH_RTP_MAX_CRYPTO_LEN];
+	unsigned char remote_video_raw_key[SWITCH_RTP_MAX_CRYPTO_LEN];
 	switch_rtp_crypto_key_type_t crypto_send_type;
 	switch_rtp_crypto_key_type_t crypto_recv_type;
-	switch_rtp_crypto_key_type_t crypto_type;
+	switch_rtp_crypto_key_type_t crypto_audio_type;
+	switch_rtp_crypto_key_type_t crypto_video_type;
 	char *early_sdp;
 	char *local_sdp_str;
 	char *last_sdp_str;
@@ -762,8 +768,10 @@ struct private_object {
 	char *invite_contact;
 	char *local_url;
 	char *gateway_name;
-	char *local_crypto_key;
-	char *remote_crypto_key;
+	char *local_audio_crypto_key;
+	char *local_video_crypto_key;
+	char *remote_audio_crypto_key;
+	char *remote_video_crypto_key;
 	char *record_route;
 	char *extrtpip;
 	char *stun_ip;
@@ -904,7 +912,7 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 
 void sofia_glue_deactivate_rtp(private_object_t *tech_pvt);
 
-void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip, const char *media_ip, switch_port_t port, switch_port_t v_port, const char *sr, int force);
+void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip, const char *media_ip, switch_port_t port, switch_port_t v_port, const char *crypto, const char* v_crypto, const char *sr, int force);
 
 void sofia_glue_tech_prepare_codecs(private_object_t *tech_pvt);
 
@@ -1102,7 +1110,7 @@ char *sofia_glue_strip_uri(const char *str);
 int sofia_glue_check_nat(sofia_profile_t *profile, const char *network_ip);
 int sofia_glue_transport_has_tls(const sofia_transport_t tp);
 const char *sofia_glue_get_unknown_header(sip_t const *sip, const char *name);
-switch_status_t sofia_glue_build_crypto(private_object_t *tech_pvt, int index, switch_rtp_crypto_key_type_t type, switch_rtp_crypto_direction_t direction);
+switch_status_t sofia_glue_build_crypto(private_object_t *tech_pvt, int index, switch_rtp_crypto_key_type_t type, switch_rtp_crypto_direction_t direction, int video);
 void sofia_glue_tech_patch_sdp(private_object_t *tech_pvt);
 switch_status_t sofia_glue_tech_proxy_remote_addr(private_object_t *tech_pvt, const char *sdp_str);
 void sofia_presence_event_thread_start(void);

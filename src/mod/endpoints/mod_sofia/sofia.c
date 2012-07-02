@@ -6141,7 +6141,7 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 					} else {
 						switch_channel_set_variable(channel, SWITCH_ENDPOINT_DISPOSITION_VARIABLE, "RECEIVED_NOSDP");
 						sofia_glue_tech_choose_port(tech_pvt, 0);
-						sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 0);
+						sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 0);
 						sofia_set_flag_locked(tech_pvt, TFLAG_3PCC);
 						switch_channel_set_state(channel, CS_HIBERNATE);
 						if (sofia_use_soa(tech_pvt)) {
@@ -6258,7 +6258,7 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 										goto done;
 									}
 								}
-								sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 1);
+								sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 1);
 
 								if (sofia_use_soa(tech_pvt)) {
 									nua_respond(tech_pvt->nh, SIP_200_OK,
@@ -6361,7 +6361,7 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 							goto done;
 						}
 					
-						sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 0);
+						sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 0);
 
 						if (sofia_glue_activate_rtp(tech_pvt, 0) != SWITCH_STATUS_SUCCESS) {
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Reinvite RTP Error!\n");
@@ -6378,8 +6378,8 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 
 
 				if (is_ok) {
-					if (tech_pvt->local_crypto_key) {
-						sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 0);
+					if (tech_pvt->local_audio_crypto_key) {
+						sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 0);
 					}
 					if (sofia_use_soa(tech_pvt)) {
 						nua_respond(tech_pvt->nh, SIP_200_OK,
@@ -6417,7 +6417,7 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 				if (sofia_glue_tech_choose_port(tech_pvt, 0) != SWITCH_STATUS_SUCCESS) {
 					goto done;
 				}
-				sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, 0);
+				sofia_glue_set_local_sdp(tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 0);
 
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Processing updated SDP\n");
 				sofia_set_flag_locked(tech_pvt, TFLAG_REINVITE);
@@ -8986,8 +8986,8 @@ void sofia_info_send_sipfrag(switch_core_session_t *aleg, switch_core_session_t 
 					snprintf(message, sizeof(message), "P-Asserted-Identity: \"%s\" <%s>", acp->caller_id_name, acp->caller_id_number);
 				}
 
-				if (b_tech_pvt->local_crypto_key) {
-					sofia_glue_set_local_sdp(b_tech_pvt, NULL, NULL, 0, 0, NULL, 0);
+				if (b_tech_pvt->local_audio_crypto_key) {
+					sofia_glue_set_local_sdp(b_tech_pvt, NULL, NULL, 0, 0, NULL, NULL, NULL, 0);
 				}
 
 				if (sofia_use_soa(b_tech_pvt)) {
