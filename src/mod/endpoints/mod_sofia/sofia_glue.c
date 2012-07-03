@@ -178,7 +178,7 @@ void sofia_glue_set_image_sdp(private_object_t *tech_pvt, switch_t38_options_t *
 
 static void generate_m(private_object_t *tech_pvt, char *buf, size_t buflen, 
 					   switch_port_t port,
-					   int cur_ptime, const char *append_audio, const char *sr, int use_cng, int cng_type, switch_event_t *map, int verbose_sdp, int secure)
+					   int cur_ptime, const char *append_audio, const char *sr, int use_cng, int cng_type, switch_event_t *map, int verbose_sdp, int secure, const char *crypto)
 {
 	int i = 0;
 	int rate;
@@ -321,7 +321,10 @@ static void generate_m(private_object_t *tech_pvt, char *buf, size_t buflen,
 	}
 
 	if (secure) {
-		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=crypto:%s\n", tech_pvt->local_audio_crypto_key);
+		if (!crypto) {
+			crypto = tech_pvt->local_audio_crypto_key;
+		}
+		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=crypto:%s\n", crypto);
 		//switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=encryption:optional\n");
 	}
 
@@ -567,7 +570,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "a=%s\n", sr);
 		}
 
-		if (!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
+		if (!crypto && !zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE)) {
 			crypto = tech_pvt->local_audio_crypto_key;
 		}
 
@@ -595,7 +598,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 			int both = 1;
 
 			if ((!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE))) {
-				generate_m(tech_pvt, buf, sizeof(buf), port, 0, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 1);
+				generate_m(tech_pvt, buf, sizeof(buf), port, 0, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 1, crypto);
 				bp = (buf + strlen(buf));
 
 				/* asterisk can't handle AVP and SAVP in sep streams, way to blow off the spec....*/
@@ -606,7 +609,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 			}
 
 			if (both) {
-				generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, 0, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 0);
+				generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, 0, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 0, NULL);
 			}
 
 		} else {
@@ -631,7 +634,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 					cur_ptime = this_ptime;			
 					
 					if ((!zstr(tech_pvt->local_audio_crypto_key) && sofia_test_flag(tech_pvt, TFLAG_SECURE))) {
-						generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, cur_ptime, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 1);
+						generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, cur_ptime, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 1, crypto);
 						bp = (buf + strlen(buf));
 
 						/* asterisk can't handle AVP and SAVP in sep streams, way to blow off the spec....*/
@@ -641,7 +644,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
 					}
 
 					if (both) {
-						generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, cur_ptime, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 0);
+						generate_m(tech_pvt, bp, sizeof(buf) - strlen(buf), port, cur_ptime, append_audio, sr, use_cng, cng_type, map, verbose_sdp, 0, NULL);
 					}
 				}
 				
@@ -662,7 +665,7 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip
             if (!v_crypto) {
                 v_crypto = tech_pvt->local_video_crypto_key;
             }
-			
+
 			if (v_crypto) {
 				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "m=video %d RTP/SAVP", v_port);
 			}
@@ -5274,11 +5277,17 @@ uint8_t sofia_glue_negotiate_sdp(switch_core_session_t *session, const char *r_s
 						tech_pvt->remote_video_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
 						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_VIDEO_CRYPTO_VARIABLE, tech_pvt->remote_video_crypto_key);
 						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Set Video Remote Key [%s]\n", tech_pvt->remote_video_crypto_key);
+						if (zstr(tech_pvt->local_video_crypto_key)) {
+							sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_32, SWITCH_RTP_CRYPTO_SEND, 1);
+						}
                     } else if (switch_stristr(SWITCH_RTP_CRYPTO_KEY_80, crypto)) {
                         switch_channel_set_variable(tech_pvt->channel, SOFIA_HAS_VIDEO_CRYPTO_VARIABLE, SWITCH_RTP_CRYPTO_KEY_80);
 						tech_pvt->remote_video_crypto_key = switch_core_session_strdup(tech_pvt->session, crypto);
 						switch_channel_set_variable(tech_pvt->channel, SWITCH_REMOTE_VIDEO_CRYPTO_VARIABLE, tech_pvt->remote_video_crypto_key);
 						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Set Video Remote Key [%s]\n", tech_pvt->remote_video_crypto_key);
+						if (zstr(tech_pvt->local_video_crypto_key)) {
+							sofia_glue_build_crypto(tech_pvt, atoi(crypto), AES_CM_128_HMAC_SHA1_80, SWITCH_RTP_CRYPTO_SEND, 1);
+						}
                     } else {
                         switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Video Crypto Setup Failed!.\n");
                     }
