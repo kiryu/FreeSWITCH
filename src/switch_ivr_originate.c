@@ -2331,7 +2331,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 					q = !q;
 				}
 
-				if (end && p < end && *p == ',') {
+				if (end && p < end && *p == ',' && *(p-1) != '\\') {
 					
 					if (q || alt) {
 						*p = QUOTED_ESC_COMMA;
@@ -3597,6 +3597,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 			switch_channel_set_variable(caller_channel, SWITCH_ORIGINATE_SIGNAL_BOND_VARIABLE, NULL);
 		}
 		
+
+		switch_channel_execute_on(bchan, SWITCH_CHANNEL_EXECUTE_ON_POST_ORIGINATE_VARIABLE);
+		switch_channel_api_on(bchan, SWITCH_CHANNEL_API_ON_POST_ORIGINATE_VARIABLE);
+
 
 		while(switch_channel_state_change_pending(bchan)) {
 			switch_cond_next();

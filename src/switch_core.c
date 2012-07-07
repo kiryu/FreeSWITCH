@@ -1538,7 +1538,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_init(switch_core_flag_t flags, switc
 	switch_log_init(runtime.memory_pool, runtime.colorize_console);
 
 	if (flags & SCF_MINIMAL) return SWITCH_STATUS_SUCCESS;
-													   
+			
 	runtime.tipping_point = 0;
 	runtime.timer_affinity = -1;
 	runtime.microseconds_per_tick = 20000;
@@ -1560,6 +1560,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_init(switch_core_flag_t flags, switc
 
 	runtime.running = 1;
 	runtime.initiated = switch_time_now();
+	runtime.mono_initiated = switch_mono_micro_time_now();
 	
 	switch_scheduler_add_task(switch_epoch_time_now(NULL), heartbeat_callback, "heartbeat", "core", 0, NULL, SSHF_NONE | SSHF_NO_DEL);
 
@@ -1577,13 +1578,8 @@ SWITCH_DECLARE(switch_status_t) switch_core_init(switch_core_flag_t flags, switc
 static void handle_SIGCHLD(int sig)
 {
 	int status = 0;
-//	int pid = 0;
 
-	if (sig) {};
-
-//	pid = wait(&status);
 	wait(&status);
-	
 	return;
 }
 #endif
@@ -1784,6 +1780,8 @@ static void switch_load_core_config(const char *file)
 					if (tmp > 0) {
 						switch_core_default_dtmf_duration((uint32_t) tmp);
 					}
+				} else if (!strcasecmp(var, "enable-use-system-time")) {
+					switch_time_set_use_system_time(switch_true(val));
 				} else if (!strcasecmp(var, "enable-monotonic-timing")) {
 					switch_time_set_monotonic(switch_true(val));
 				} else if (!strcasecmp(var, "enable-softtimer-timerfd")) {
@@ -1818,6 +1816,23 @@ static void switch_load_core_config(const char *file)
 					switch_core_min_idle_cpu(atof(val));
 				} else if (!strcasecmp(var, "tipping-point") && !zstr(val)) {
 					runtime.tipping_point = atoi(val);
+				} else if (!strcasecmp(var, "initial-event-threads") && !zstr(val)) {
+					int tmp = atoi(val);
+
+
+					if (tmp > runtime.cpu_count / 2) {
+						tmp = runtime.cpu_count / 2;
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "This value cannot be higher than %d so setting it to that value\n", 
+										  runtime.cpu_count / 2);
+					}
+
+					if (tmp < 1) {
+						tmp = 1;
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "This value cannot be lower than 1 so setting it to that level\n");
+					}
+
+					switch_event_launch_dispatch_threads(tmp);
+
 				} else if (!strcasecmp(var, "1ms-timer") && switch_true(val)) {
 					runtime.microseconds_per_tick = 1000;
 				} else if (!strcasecmp(var, "timer-affinity") && !zstr(val)) {
@@ -1882,7 +1897,6 @@ static void switch_load_core_config(const char *file)
 SWITCH_DECLARE(const char *) switch_core_banner(void)
 {
 
-
 	return ("\n"
 			"   _____              ______        _____ _____ ____ _   _  \n"
 			"  |  ___| __ ___  ___/ ___\\ \\      / /_ _|_   _/ ___| | | | \n"
@@ -1894,7 +1908,8 @@ SWITCH_DECLARE(const char *) switch_core_banner(void)
 			"* Anthony Minessale II, Michael Jerris, Brian West, Others *\n"
 			"* FreeSWITCH (http://www.freeswitch.org)                   *\n"
 			"* Paypal Donations Appreciated: paypal@freeswitch.org      *\n"
-			"* Brought to you by ClueCon http://www.cluecon.com/        *\n" "************************************************************\n" "\n");
+			"* Brought to you by ClueCon http://www.cluecon.com/        *\n" "************************************************************\n" 
+			"\n");
 }
 
 
@@ -1902,6 +1917,8 @@ SWITCH_DECLARE(switch_status_t) switch_core_init_and_modload(switch_core_flag_t 
 {
 	switch_event_t *event;
 	char *cmd;
+#include "cc.h"
+
 
 	if (switch_core_init(flags, console, err) != SWITCH_STATUS_SUCCESS) {
 		return SWITCH_STATUS_GENERR;
@@ -1936,7 +1953,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_init_and_modload(switch_core_flag_t 
 		switch_event_fire(&event);
 	}
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "%s", switch_core_banner());
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "%s%s", switch_core_banner(), cc);
 
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE,
@@ -1978,7 +1995,7 @@ SWITCH_DECLARE(void) switch_core_measure_time(switch_time_t total_ms, switch_cor
 
 SWITCH_DECLARE(switch_time_t) switch_core_uptime(void)
 {
-	return switch_micro_time_now() - runtime.initiated;
+	return switch_mono_micro_time_now() - runtime.mono_initiated;
 }
 
 
@@ -2634,6 +2651,30 @@ SWITCH_DECLARE(int) switch_stream_system_fork(const char *cmd, switch_stream_han
 #endif
 
 }
+
+SWITCH_DECLARE(switch_status_t) switch_core_get_stacksizes(switch_size_t *cur, switch_size_t *max)
+{
+#ifdef HAVE_SETRLIMIT
+	struct rlimit rlp;
+
+	memset(&rlp, 0, sizeof(rlp));
+	getrlimit(RLIMIT_STACK, &rlp);
+
+	*cur = rlp.rlim_cur;
+	*max = rlp.rlim_max;
+
+	return SWITCH_STATUS_SUCCESS;
+
+#else
+
+	return SWITCH_STATUS_FALSE;
+
+#endif
+
+
+
+}
+
 
 SWITCH_DECLARE(int) switch_stream_system(const char *cmd, switch_stream_handle_t *stream)
 {

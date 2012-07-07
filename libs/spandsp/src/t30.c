@@ -2534,7 +2534,7 @@ static int process_rx_pps(t30_state_t *s, const uint8_t *msg, int len)
            we sent - which would have been a T30_MCF - If the block is for the previous
            page, or the previous block of the current page, we can assume we have hit this
            condition. */
-        if (((s->rx_page_number & 0xFF) == page  &&  (s->ecm_block & 0xFF) == block)
+        if (((s->rx_page_number & 0xFF) == page  &&  ((s->ecm_block - 1) & 0xFF) == block)
             ||
             (((s->rx_page_number - 1) & 0xFF) == page  &&  s->ecm_block == 0))
         {
@@ -2568,7 +2568,6 @@ static int process_rx_pps(t30_state_t *s, const uint8_t *msg, int len)
         for (j = 0;  j < 8;  j++)
         {
             frame_no = (i << 3) + j;
-#if defined(VET_ALL_FCD_FRAMES)
             if (s->ecm_len[frame_no] >= 0)
             {
                 /* The correct pattern of frame lengths is they will all be 64 or 256 octets long, except the
@@ -2598,7 +2597,6 @@ static int process_rx_pps(t30_state_t *s, const uint8_t *msg, int len)
                     }
                 }
             }            
-#endif
             if (s->ecm_len[frame_no] < 0)
             {
                 s->ecm_frame_map[i + 3] |= (1 << j);
@@ -6347,11 +6345,11 @@ SPAN_DECLARE(int) t30_restart(t30_state_t *s)
 
 SPAN_DECLARE(t30_state_t *) t30_init(t30_state_t *s,
                                      int calling_party,
-                                     t30_set_handler_t *set_rx_type_handler,
+                                     t30_set_handler_t set_rx_type_handler,
                                      void *set_rx_type_user_data,
-                                     t30_set_handler_t *set_tx_type_handler,
+                                     t30_set_handler_t set_tx_type_handler,
                                      void *set_tx_type_user_data,
-                                     t30_send_hdlc_handler_t *send_hdlc_handler,
+                                     t30_send_hdlc_handler_t send_hdlc_handler,
                                      void *send_hdlc_user_data)
 {
     if (s == NULL)

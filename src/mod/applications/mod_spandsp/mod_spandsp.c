@@ -34,6 +34,8 @@
  *
  */
 
+
+
 #include "mod_spandsp.h"
 #include <spandsp/version.h>
 #include "mod_spandsp_modem.h"
@@ -51,7 +53,6 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init);
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_spandsp_shutdown);
 SWITCH_MODULE_DEFINITION(mod_spandsp, mod_spandsp_init, mod_spandsp_shutdown, NULL);
 
-static switch_event_node_t *NODE = NULL;
 
 SWITCH_STANDARD_APP(spanfax_tx_function)
 {
@@ -71,6 +72,47 @@ SWITCH_STANDARD_APP(dtmf_session_function)
 SWITCH_STANDARD_APP(stop_dtmf_session_function)
 {
 	spandsp_stop_inband_dtmf_session(session);
+}
+
+
+SWITCH_STANDARD_APP(tdd_encode_function)
+{
+    char *text = (char *) data;
+
+    if (!zstr(text)) {
+        spandsp_tdd_encode_session(session, text);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Missing text data\n");
+    }
+}
+
+SWITCH_STANDARD_APP(tdd_send_function)
+{
+    char *text = (char *) data;
+
+    if (!zstr(text)) {
+        spandsp_tdd_send_session(session, text);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Missing text data\n");
+    }
+}
+
+SWITCH_STANDARD_APP(stop_tdd_encode_function)
+{
+	spandsp_stop_tdd_encode_session(session);
+}
+
+
+
+
+SWITCH_STANDARD_APP(tdd_decode_function)
+{
+    spandsp_tdd_decode_session(session);
+}
+
+SWITCH_STANDARD_APP(stop_tdd_decode_function)
+{
+	spandsp_stop_tdd_decode_session(session);
 }
 
 
@@ -115,6 +157,36 @@ SWITCH_STANDARD_APP(spandsp_stop_fax_detect_session_function)
 {
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "Disabling fax detection\n");
     spandsp_fax_stop_detect_session(session);
+}
+
+static void tdd_event_handler(switch_event_t *event)
+{
+    const char *uuid = switch_event_get_header(event, "tdd-uuid");
+    const char *message = switch_event_get_body(event);
+    switch_core_session_t *session;
+
+    if (zstr(message)) {
+        message = switch_event_get_header(event, "tdd-message");
+    }
+
+    if (zstr(message)) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "No message for tdd handler\n");   
+        return;
+    }
+
+    if (zstr(uuid)) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "No uuid for tdd handler\n");   
+        return;
+    }
+
+    if ((session = switch_core_session_locate(uuid))) {
+
+        spandsp_tdd_encode_session(session, message);
+
+        switch_core_session_rwunlock(session);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "No session for supplied uuid.\n");   
+    }
 }
 
 static void event_handler(switch_event_t *event)
@@ -189,9 +261,7 @@ SWITCH_STANDARD_APP(start_tone_detect_app)
 	}
 }
 
-/**
- * Start tone detector API
- */
+
 SWITCH_STANDARD_API(start_tone_detect_api)
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -220,6 +290,8 @@ SWITCH_STANDARD_API(start_tone_detect_api)
 
 	return status;
 }
+
+
 
 /**
  * Stop tone detector application
@@ -263,6 +335,91 @@ SWITCH_STANDARD_API(stop_tone_detect_api)
 	return status;
 }
 
+
+
+SWITCH_STANDARD_API(start_tdd_detect_api)
+{
+	switch_status_t status = SWITCH_STATUS_SUCCESS;
+	 switch_core_session_t *psession = NULL;
+
+    if (!(psession = switch_core_session_locate(cmd))) {
+        stream->write_function(stream, "-ERR Cannot locate session\n");
+        return SWITCH_STATUS_SUCCESS;
+    }
+
+    spandsp_tdd_decode_session(psession);
+
+	if (status == SWITCH_STATUS_SUCCESS) {
+		stream->write_function(stream, "+OK started\n");
+	} else {
+		stream->write_function(stream, "-ERR failed to start tdd detector\n");
+	}
+    
+    switch_core_session_rwunlock(psession);
+
+	return status;
+}
+
+
+SWITCH_STANDARD_API(stop_tdd_detect_api)
+{
+	switch_status_t status = SWITCH_STATUS_SUCCESS;
+	 switch_core_session_t *psession = NULL;
+
+
+    if (!(psession = switch_core_session_locate(cmd))) {
+        stream->write_function(stream, "-ERR Cannot locate session\n");
+        return SWITCH_STATUS_SUCCESS;
+    }
+
+    spandsp_stop_tdd_decode_session(psession);
+
+    stream->write_function(stream, "+OK stopped\n");
+    switch_core_session_rwunlock(psession);
+    
+	return status;
+}
+
+
+SWITCH_STANDARD_API(start_send_tdd_api)
+{
+    switch_core_session_t *psession = NULL;
+    char *puuid = NULL, *text = NULL;
+
+	if (zstr(cmd)) {
+		stream->write_function(stream, "-ERR missing uuid\n");
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+    puuid = strdup((char *)cmd);
+
+    if ((text = strchr(puuid, ' '))) {
+        *text++ = '\0';
+    }
+
+	if (zstr(text)) {
+		stream->write_function(stream, "-ERR missing text\n");
+        goto end;
+	}
+
+
+    if (!(psession = switch_core_session_locate(puuid))) {
+        stream->write_function(stream, "-ERR Cannot locate session\n");
+        goto end;
+    }
+
+
+    spandsp_tdd_encode_session(psession, text);
+
+    stream->write_function(stream, "+OK\n");
+    switch_core_session_rwunlock(psession);
+    
+ end:
+
+    switch_safe_free(puuid);
+
+	return SWITCH_STATUS_SUCCESS;
+}
 
 void mod_spandsp_indicate_data(switch_core_session_t *session, switch_bool_t self, switch_bool_t on)
 {
@@ -543,6 +700,16 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init)
 	SWITCH_ADD_APP(app_interface, "spandsp_stop_dtmf", "stop inband dtmf", "Stop detecting inband dtmf.", stop_dtmf_session_function, "", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "spandsp_start_dtmf", "Detect dtmf", "Detect inband dtmf on the session", dtmf_session_function, "", SAF_MEDIA_TAP);
 
+
+	SWITCH_ADD_APP(app_interface, "spandsp_stop_inject_tdd", "stop sending tdd", "", stop_tdd_encode_function, "", SAF_NONE);
+	SWITCH_ADD_APP(app_interface, "spandsp_inject_tdd", "Send TDD data", "Send TDD data", tdd_encode_function, "", SAF_MEDIA_TAP);
+
+	SWITCH_ADD_APP(app_interface, "spandsp_stop_detect_tdd", "stop sending tdd", "", stop_tdd_decode_function, "", SAF_NONE);
+	SWITCH_ADD_APP(app_interface, "spandsp_detect_tdd", "Detect TDD data", "Detect TDD data", tdd_decode_function, "", SAF_MEDIA_TAP);
+
+
+	SWITCH_ADD_APP(app_interface, "spandsp_send_tdd", "Send TDD data", "Send TDD data", tdd_send_function, "", SAF_NONE);
+
 	SWITCH_ADD_APP(app_interface, "spandsp_start_fax_detect", "start fax detect", "start fax detect", spandsp_fax_detect_session_function, 
 				   "<app>[ <arg>][ <timeout>][ <tone_type>]", SAF_NONE);
 
@@ -562,10 +729,25 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init)
         SWITCH_ADD_API(api_interface, "start_tone_detect", "Start background tone detection with cadence", start_tone_detect_api, "[name]");
         SWITCH_ADD_API(api_interface, "stop_tone_detect", "Stop background tone detection with cadence", stop_tone_detect_api, "");
 	}
+    
 
-	if ((switch_event_bind_removable(modname, SWITCH_EVENT_RELOADXML, NULL, event_handler, NULL, &NODE) != SWITCH_STATUS_SUCCESS)) {
+    SWITCH_ADD_API(api_interface, "start_tdd_detect", "Start background tdd detection", start_tdd_detect_api, "<uuid>");
+    SWITCH_ADD_API(api_interface, "stop_tdd_detect", "Stop background tdd detection", stop_tdd_detect_api, "<uuid>");
+
+    SWITCH_ADD_API(api_interface, "uuid_send_tdd", "send tdd data to a uuid", start_send_tdd_api, "<uuid> <text>");
+
+	switch_console_set_complete("add uuid_send_tdd ::console::list_uuid");
+
+
+
+	if ((switch_event_bind(modname, SWITCH_EVENT_RELOADXML, NULL, event_handler, NULL) != SWITCH_STATUS_SUCCESS)) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't bind our reloadxml handler!\n");
 		/* Not such severe to prevent loading */
+	}
+
+
+	if (switch_event_bind(modname, SWITCH_EVENT_CUSTOM, MY_EVENT_TDD_SEND_MESSAGE, tdd_event_handler, NULL) != SWITCH_STATUS_SUCCESS) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't bind!\n");
 	}
 
 
@@ -578,7 +760,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init)
 
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_spandsp_shutdown)
 {
-	switch_event_unbind(&NODE);
+	switch_event_unbind_callback(event_handler);
+	switch_event_unbind_callback(tdd_event_handler);
+
 
 	mod_spandsp_fax_shutdown();
 	mod_spandsp_dsp_shutdown();

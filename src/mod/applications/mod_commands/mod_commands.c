@@ -1728,6 +1728,7 @@ SWITCH_STANDARD_API(status_function)
 	char *http = NULL;
 	int sps = 0, last_sps = 0;
 	const char *var;
+	switch_size_t cur = 0, max = 0;
 
 	switch_core_measure_time(switch_core_uptime(), &duration);
 
@@ -1763,6 +1764,11 @@ SWITCH_STANDARD_API(status_function)
 	stream->write_function(stream, "%d session(s) %d/%d\n", switch_core_session_count(), last_sps, sps);
 	stream->write_function(stream, "%d session(s) max\n", switch_core_session_limit(0));
 	stream->write_function(stream, "min idle cpu %0.2f/%0.2f\n", switch_core_min_idle_cpu(-1.0), switch_core_idle_cpu());
+
+
+	if (switch_core_get_stacksizes(&cur, &max) == SWITCH_STATUS_SUCCESS) {
+		stream->write_function(stream, "Current Stack Size/Max %ldK/%ldK\n", cur / 1024, max / 1024);
+	}
 
 	if (html) {
 		stream->write_function(stream, "</b>\n");
