@@ -717,8 +717,9 @@ struct private_object {
 	char *local_sdp_audio_ip;
 	switch_port_t local_sdp_audio_port;
 	char *remote_sdp_audio_ip;
-	char *remote_sdp_session_ip;
+	char *remote_sdp_private_ip;
 	switch_port_t remote_sdp_audio_port;
+	switch_port_t remote_sdp_audio_private_port;
 	char *adv_sdp_audio_ip;
 	switch_port_t adv_sdp_audio_port;
 	char *proxy_sdp_audio_ip;
@@ -813,6 +814,7 @@ struct private_object {
 	uint32_t video_codec_ms;
 	char *remote_sdp_video_ip;
 	switch_port_t remote_sdp_video_port;
+	switch_port_t remote_sdp_video_private_port;
 	char *video_rm_fmtp;
 	switch_payload_t video_agreed_pt;
 	char *video_fmtp_out;
@@ -915,7 +917,7 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 
 void sofia_glue_deactivate_rtp(private_object_t *tech_pvt);
 
-void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *session_ip, const char *media_ip, switch_port_t port, switch_port_t v_port, const char *crypto, const char* v_crypto, const char *sr, int force);
+void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *media_ip, const char *private_ip, switch_port_t port, switch_port_t private_port, switch_port_t v_port, switch_port_t v_private_port, const char *crypto, const char* v_crypto, const char *sr, int force);
 
 void sofia_glue_tech_prepare_codecs(private_object_t *tech_pvt);
 
