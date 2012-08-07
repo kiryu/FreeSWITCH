@@ -656,6 +656,10 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *media_ip, 
 				
 			}
 		}
+
+        if (private_port > 0) {
+            switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "a=privateport:%d\n", private_port);
+        }
 	}
 	
 	if (sofia_test_flag(tech_pvt, TFLAG_VIDEO)) {
