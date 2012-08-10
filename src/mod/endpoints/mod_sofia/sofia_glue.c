@@ -2608,21 +2608,16 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 		}
 	}
 
-switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_INFO, "ROUTE1 route_uri=%s, route=%s\n", route_uri, route);
-
 	if ((val = switch_channel_get_variable(channel, "sip_route_uri"))) {
 		route_uri = switch_core_session_strdup(session, val);
 		route = NULL;
 	}
-switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_INFO, "ROUTE2 route_uri=%s, route=%s\n", route_uri, route);
 
 	if (route_uri) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_DEBUG, "%s Setting proxy route to %s\n", route_uri,
 						  switch_channel_get_name(channel));
 		tech_pvt->route_uri = switch_core_session_strdup(tech_pvt->session, route_uri);
 	}
-
-switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_INFO, "ROUTE3 route_uri=%s, route=%s\n", route_uri, route);
 
 	if ((val = switch_channel_get_variable(tech_pvt->channel, "sip_invite_cseq"))) {
 		uint32_t callsequence = (uint32_t) strtoul(val, NULL, 10);

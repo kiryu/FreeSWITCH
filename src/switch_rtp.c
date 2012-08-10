@@ -1677,8 +1677,7 @@ SWITCH_DECLARE(switch_status_t) switch_rtp_add_crypto_key(switch_rtp_t *rtp_sess
 		}
 		break;
 	case SWITCH_RTP_CRYPTO_SEND:
-		policy->ssrc.type = ssrc_specific;
-		policy->ssrc.value = rtp_session->ssrc;
+		policy->ssrc.type = ssrc_any_outbound;
 
 		if (switch_test_flag(rtp_session, SWITCH_RTP_FLAG_SECURE_SEND)) {
 			switch_set_flag(rtp_session, SWITCH_RTP_FLAG_SECURE_SEND_RESET);
